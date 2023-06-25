@@ -59,22 +59,19 @@ uint8_t aEncryptedtextECB128[64] = {
 /*AES_CBC*/
 /* Expected text: Encrypted Data with AES 128 Mode CBC */
 uint8_t aEncryptedtextCBC128[64] = {
-  0xAC, 0xAB, 0x49, 0x76, 0x46, 0xB2, 0x19, 0x81,
-  0x9B, 0x8E, 0xE9, 0xCE, 0x7D, 0x19, 0xE9, 0x12,
-  0x9B, 0xCB, 0x86, 0x50, 0xEE, 0x19, 0x72, 0x50,
-  0x3A, 0x11, 0xDB, 0x95, 0xB2, 0x78, 0x76, 0x91,
-  0xB8, 0xD6, 0xBE, 0x73, 0x3B, 0x74, 0xC1, 0xE3,
-  0x9E, 0xE6, 0x16, 0x71, 0x16, 0x95, 0x22, 0x22,
-  0xA1, 0xCA, 0xF1, 0x3F, 0x09, 0xAC, 0x1F, 0x68,
-  0x30, 0xCA, 0x0E, 0x12, 0xA7, 0xE1, 0x86, 0x75,
-
+  0x11, 0xd3, 0xd1, 0x11, 0x81, 0x59, 0x45, 0xfd,
+  0xc4, 0x04, 0x82, 0x7b, 0x1d, 0x9b, 0x5c, 0xdb,
+  0x20, 0xef, 0xe0, 0x3d, 0x34, 0x90, 0x58, 0x13,
+  0x9f, 0xaf, 0xd0, 0xd8, 0xc2, 0x03, 0xef, 0xdb,
+  0x8b, 0x97, 0x1b, 0x9a, 0xab, 0x31, 0x2f, 0xed,
+  0x40, 0x42, 0x2f, 0x45, 0x01, 0x8a, 0xc4, 0xdb,
+  0xda, 0x8d, 0xd1, 0x64, 0x09, 0x5b, 0x4e, 0x7b,
+  0x19, 0x1c, 0x30, 0x57, 0xe0, 0xc9, 0x1e, 0x24,
 };
 
 uint8_t AESIV[16] = {
-  0x00, 0x01, 0x02, 0x03,
-  0x04, 0x05, 0x06, 0x07,
-  0x08, 0x09, 0x0A, 0x0B,
-  0x0C, 0x0D, 0x0E, 0x0F,
+  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+  0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
 };
 
 uint8_t pKey[16] = {0};
@@ -181,7 +178,6 @@ void setup() {
 
   // 64-byte test
   memcpy(pKey, pKeyAES, 16);
-  memcpy(Iv, AESIV, 16);
   Serial.println(F("=============================="));
   Serial.println(F("        64-Byte TEST"));
   Serial.println(F("=============================="));
@@ -234,50 +230,74 @@ void setup() {
     // decrypts in place, 16 bytes at a time
     counter++;
   }
+  // Since it encrypts in place, the result now has nothing to do with the original.
+  // Let's do it again once.
   memcpy(decBuf, encBuf, 64);
   AES_init_ctx(&ctx, pKey);
   AES_ECB_decrypt(&ctx, (uint8_t*)(decBuf));
   AES_ECB_decrypt(&ctx, (uint8_t*)(decBuf + 16));
   AES_ECB_decrypt(&ctx, (uint8_t*)(decBuf + 32));
   AES_ECB_decrypt(&ctx, (uint8_t*)(decBuf + 48));
-  // decrypts in place, 16 bytes at a time
   Serial.println("ECB Decoded:");
   hexDump((unsigned char *)decBuf, 64);
   Serial.printf("%d round / s\n", counter);
-  if (memcmp(decBuf, aPlaintextECB, 64)) {
+  if (memcmp(decBuf, aPlaintextECB, 64) == 0) {
     Serial.println("[o] Pass");
   } else {
     Serial.println("[XXXX] Big Fail!");
   }
 
+
+  // CBC
+  Serial.println("CBC Plaintext:");
+  hexDump((unsigned char *)aPlaintextCBC, 64);
+  Serial.println("CBC Ciphertext:");
+  hexDump((unsigned char *)aEncryptedtextCBC128, 64);
+  memcpy(Iv, AESIV, 16);
   Serial.println("IV:");
   hexDump(Iv, 16);
   memcpy(plainBuf, aPlaintextCBC, 64);
   counter = 0;
   t0 = millis() + 1000;
   while (millis() < t0) {
-    encryptCBC((uint8_t*)plainBuf, 64, Iv);
+    AES_init_ctx_iv(&ctx, pKey, Iv);
+    AES_CBC_encrypt_buffer(&ctx, (uint8_t*)plainBuf, 64);
     counter++;
   }
+  // Since it encrypts in place, the result now has nothing to do with the original.
+  // Let's do it again once.
+  memcpy(plainBuf, aPlaintextCBC, 64);
+  memcpy(Iv, AESIV, 16);
+  AES_init_ctx_iv(&ctx, pKey, Iv);
+  AES_CBC_encrypt_buffer(&ctx, (uint8_t*)plainBuf, 64);
   Serial.println("CBC Encoded:");
-  hexDump((unsigned char *)encBuf, 64);
+  hexDump((unsigned char *)plainBuf, 64);
   Serial.printf("%d round / s\n", counter);
-  if (memcmp(encBuf, aEncryptedtextCBC128, 64)) {
+  if (memcmp(plainBuf, aEncryptedtextCBC128, 64) == 0) {
     Serial.println("[o] Pass");
   } else {
     Serial.println("[XXXX] Big Fail!");
   }
-  memcpy(decBuf, encBuf, 64);
+
+  memcpy(decBuf, plainBuf, 64);
+  memcpy(Iv, AESIV, 16);
   counter = 0;
   t0 = millis() + 1000;
   while (millis() < t0) {
-    decryptCBC((uint8_t*)encBuf, 64, Iv);
+    AES_init_ctx_iv(&ctx, pKey, Iv);
+    AES_CBC_decrypt_buffer(&ctx, (uint8_t*)decBuf, 64);
     counter++;
   }
+  // Since it encrypts in place, the result now has nothing to do with the original.
+  // Let's do it again once.
+  memcpy(decBuf, plainBuf, 64);
+  memcpy(Iv, AESIV, 16);
+  AES_init_ctx_iv(&ctx, pKey, Iv);
+  AES_CBC_decrypt_buffer(&ctx, (uint8_t*)decBuf, 64);
   Serial.println("CBC Decoded:");
   hexDump((unsigned char *)decBuf, 64);
   Serial.printf("%d round / s\n", counter);
-  if (memcmp(encBuf, aPlaintextCBC, 64)) {
+  if (memcmp(decBuf, aPlaintextCBC, 64) == 0) {
     Serial.println("[o] Pass");
   } else {
     Serial.println("[XXXX] Big Fail!");
